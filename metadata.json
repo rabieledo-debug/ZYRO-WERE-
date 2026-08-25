@@ -1,0 +1,8 @@
+{
+  "name": "ZYRO",
+  "description": "المتجر الرسمي لعلامة ZYRO للأزياء والملابس العصرية - ZYRO Official Streetwear & Minimalist Fashion Store",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

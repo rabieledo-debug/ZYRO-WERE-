@@ -1,0 +1,141 @@
+{
+  "entities": {
+    "products": {
+      "title": "Products",
+      "description": "Store products catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "hex": { "type": "string" }
+            }
+          }
+        },
+        "sizes": { "type": "array", "items": { "type": "string" } },
+        "fitType": { "type": "string" },
+        "fabricSpecs": { "type": "string" },
+        "isNew": { "type": "boolean" },
+        "isBestSeller": { "type": "boolean" },
+        "isSale": { "type": "boolean" },
+        "inStock": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "category", "price", "inStock"]
+    },
+    "categories": {
+      "title": "Categories",
+      "description": "Product categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "slug": { "type": "string" },
+        "image": { "type": "string" },
+        "order": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "slug", "isActive"]
+    },
+    "orders": {
+      "title": "Orders",
+      "description": "Customer purchase orders",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "altPhone": { "type": "string" },
+        "governorate": { "type": "string" },
+        "cityArea": { "type": "string" },
+        "detailedAddress": { "type": "string" },
+        "notes": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "shipping": { "type": "number" },
+        "total": { "type": "number" },
+        "couponCode": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["orderNumber", "customerName", "phone", "total", "status"]
+    },
+    "coupons": {
+      "title": "Coupons",
+      "description": "Discount codes",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "discountType": { "type": "string" },
+        "value": { "type": "number" },
+        "minSpend": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["code", "discountType", "value", "isActive"]
+    },
+    "governorates": {
+      "title": "Governorates",
+      "description": "Shipping regions and fees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "shippingFee": { "type": "number" },
+        "deliveryDays": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "order": { "type": "number" }
+      },
+      "required": ["name", "shippingFee", "deliveryDays"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "General store and website settings",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "logoText": { "type": "string" },
+        "logoImage": { "type": "string" },
+        "announcementText": { "type": "string" },
+        "heroBadge": { "type": "string" },
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "heroImage": { "type": "string" },
+        "heroCtaText": { "type": "string" },
+        "freeShippingThreshold": { "type": "number" },
+        "currency": { "type": "string" },
+        "instagramUrl": { "type": "string" },
+        "facebookUrl": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "workingHours": { "type": "string" },
+        "aboutText": { "type": "string" },
+        "footerCopy": { "type": "string" },
+        "refundPolicy": { "type": "string" },
+        "termsText": { "type": "string" }
+      }
+    }
+  }
+}
