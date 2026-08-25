@@ -86,3 +86,87 @@ export async function resizeImageToAspect(
     }
   });
 }
+
+/**
+ * Optimizes a product image for fast loading and durable cloud storage.
+ * Proportionally scales down images to a maximum bounding box (default: 900x900px)
+ * while preserving aspect ratio and crisp fidelity.
+ */
+export async function optimizeProductImage(
+  fileOrUrl: File | string,
+  maxDimension: number = 900,
+  quality: number = 0.85
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    const handleLoad = () => {
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Could not get 2D canvas context'));
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        // Draw image onto canvas
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as WebP or JPEG
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      } catch (err) {
+        // In case canvas export is tainted by external cross-origin URL, fallback to original URL
+        if (typeof fileOrUrl === 'string') {
+          resolve(fileOrUrl);
+        } else {
+          reject(err);
+        }
+      }
+    };
+
+    img.onerror = () => {
+      if (typeof fileOrUrl === 'string') {
+        resolve(fileOrUrl);
+      } else {
+        reject(new Error('Failed to load image for processing'));
+      }
+    };
+
+    if (typeof fileOrUrl === 'string') {
+      img.src = fileOrUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (typeof e.target?.result === 'string') {
+          img.src = e.target.result;
+        } else {
+          reject(new Error('Failed to read file as Data URL'));
+        }
+      };
+      reader.onerror = () => reject(new Error('FileReader error'));
+      reader.readAsDataURL(fileOrUrl);
+    }
+  });
+}
+

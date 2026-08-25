@@ -133,17 +133,12 @@ export function cleanStoreSettings(data: any): StoreSettings {
   merged.footerCopy = replaceSavix(merged.footerCopy, '© 2026 ZYRO. جميع الحقوق محفوظة لمتجر ZYRO الرسمي.');
   merged.email = replaceSavix(merged.email, 'support@zyrostore.com');
 
-  // Strip placeholder unsplash images if present
-  if (merged.heroImage && (merged.heroImage.includes('unsplash.com') || merged.heroImage.includes('postimg.cc'))) {
-    merged.heroImage = '';
-  }
-  if (merged.logoImage && (merged.logoImage.includes('postimg.cc') || merged.logoImage.includes('unsplash.com'))) {
-    merged.logoImage = '';
-  }
+  merged.heroImage = typeof merged.heroImage === 'string' ? merged.heroImage.trim() : '';
+  merged.logoImage = typeof merged.logoImage === 'string' ? merged.logoImage.trim() : '';
 
   // Hero Media Normalization
   merged.heroMediaType = data?.heroMediaType || (isVideoMedia(merged.heroImage || merged.heroVideoUrl) ? 'video' : 'image');
-  merged.heroVideoUrl = typeof data?.heroVideoUrl === 'string' ? data.heroVideoUrl : '';
+  merged.heroVideoUrl = typeof data?.heroVideoUrl === 'string' ? data.heroVideoUrl.trim() : '';
   merged.heroMediaPosition = (['center', 'top', 'bottom'].includes(data?.heroMediaPosition) ? data.heroMediaPosition : 'center') as 'center' | 'top' | 'bottom';
 
   return merged;
@@ -405,14 +400,18 @@ export function subscribeProducts(callback: (products: Product[]) => void) {
       const items: Product[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as Product;
-        // Strip placeholder unsplash image URLs if present
-        const sanitizedImages = (data.images || []).filter(
-          (img) => typeof img === 'string' && img.trim() && !img.includes('unsplash.com') && !img.includes('postimg.cc')
-        );
+        // Normalize product images array
+        let productImages: string[] = [];
+        if (Array.isArray(data.images)) {
+          productImages = data.images.filter((img) => typeof img === 'string' && img.trim().length > 0);
+        } else if (typeof (data as any).image === 'string' && (data as any).image.trim().length > 0) {
+          productImages = [(data as any).image.trim()];
+        }
+
         items.push({
           ...data,
           id: docSnap.id,
-          images: sanitizedImages,
+          images: productImages,
         });
       });
       // Sort newest first
@@ -438,7 +437,7 @@ export function subscribeCategories(callback: (categories: CategoryItem[]) => vo
       const items: CategoryItem[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as CategoryItem;
-        const image = data.image && (data.image.includes('unsplash.com') || data.image.includes('postimg.cc')) ? '' : data.image;
+        const image = typeof data.image === 'string' ? data.image.trim() : '';
         items.push({ ...data, id: docSnap.id, image });
       });
       callback(items);
@@ -523,9 +522,9 @@ export function subscribeSettings(callback: (settings: StoreSettings) => void) {
         const raw = docSnap.data();
         const cleaned = cleanStoreSettings(raw);
         
-        // If Firestore document stored legacy name or placeholders, silently update Firestore document
+        // If Firestore document stored legacy name, silently update Firestore document
         const strData = JSON.stringify(raw);
-        if (/savix/i.test(strData) || /سافيكس/i.test(strData) || /unsplash\.com/i.test(strData) || /postimg\.cc/i.test(strData)) {
+        if (/savix/i.test(strData) || /سافيكس/i.test(strData)) {
           setDoc(settingsDocRef, sanitizeData(cleaned), { merge: true }).catch(console.error);
         }
 

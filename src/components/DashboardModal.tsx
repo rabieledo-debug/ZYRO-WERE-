@@ -66,7 +66,7 @@ import {
   isVideoMedia,
 } from '../lib/db';
 import { ColorPickerManager } from './ColorPickerManager';
-import { resizeImageToAspect } from '../lib/imageUtils';
+import { resizeImageToAspect, optimizeProductImage } from '../lib/imageUtils';
 
 interface DashboardModalProps {
   isOpen: boolean;
@@ -118,6 +118,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
   const [prodFabricSpecs, setProdFabricSpecs] = useState('100% قطن مصري فاخر');
   const [prodImageUrl, setProdImageUrl] = useState('');
   const [prodImagesList, setProdImagesList] = useState<string[]>([]);
+  const [isProcessingProdImage, setIsProcessingProdImage] = useState(false);
+  const [prodImageUploadStatus, setProdImageUploadStatus] = useState<string | null>(null);
   const [prodSizes, setProdSizes] = useState<string[]>(['M', 'L', 'XL']);
   const [prodColors, setProdColors] = useState<ProductColor[]>([
     { name: 'أسود كربوني', hex: '#111111' },
@@ -133,6 +135,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [catName, setCatName] = useState('');
   const [catDescription, setCatDescription] = useState('');
+  const [catImage, setCatImage] = useState('');
+  const [isProcessingCatImage, setIsProcessingCatImage] = useState(false);
   const [catIsActive, setCatIsActive] = useState(true);
 
   // Coupon Form State
@@ -325,6 +329,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
     setProdFabricSpecs('100% قطن مصري فاخر');
     setProdImageUrl('');
     setProdImagesList([]);
+    setIsProcessingProdImage(false);
+    setProdImageUploadStatus(null);
     setProdSizes(['M', 'L', 'XL']);
     setProdColors([
       { name: 'أسود', hex: '#111111' },
@@ -337,6 +343,62 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
     setIsProductFormOpen(false);
   };
 
+  const handleProductFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsProcessingProdImage(true);
+      setProdImageUploadStatus(`جاري معالجة وضغط ${files.length} صورة للمنتج...`);
+
+      const optimizedList: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+        const optimized = await optimizeProductImage(file, 900, 0.85);
+        if (optimized) {
+          optimizedList.push(optimized);
+        }
+      }
+
+      if (optimizedList.length > 0) {
+        setProdImagesList((prev) => [...prev, ...optimizedList]);
+        setProdImageUploadStatus(`تم رفع وتجهيز ${optimizedList.length} صورة بنجاح!`);
+        onShowToast('success', `تم إضافة ${optimizedList.length} صورة للمنتج بنجاح`);
+        setTimeout(() => setProdImageUploadStatus(null), 3500);
+      }
+    } catch (err) {
+      console.error('Error processing product image upload:', err);
+      onShowToast('error', 'حدث خطأ أثناء معالجة ورفع صورة المنتج');
+      setProdImageUploadStatus(null);
+    } finally {
+      setIsProcessingProdImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAddImageUrl = () => {
+    const trimmed = prodImageUrl.trim();
+    if (!trimmed) return;
+    setProdImagesList((prev) => [...prev, trimmed]);
+    setProdImageUrl('');
+    onShowToast('info', 'تمت إضافة رابط الصورة إلى قائمة صور المنتج');
+  };
+
+  const handleMakeCoverImage = (index: number) => {
+    if (index === 0 || index >= prodImagesList.length) return;
+    setProdImagesList((prev) => {
+      const copy = [...prev];
+      const selected = copy.splice(index, 1)[0];
+      return [selected, ...copy];
+    });
+    onShowToast('info', 'تم تعيين الصورة كغلاف رئيسي للمنتج');
+  };
+
+  const handleRemoveProductImage = (index: number) => {
+    setProdImagesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleEditProduct = (p: Product) => {
     setEditingProductId(p.id);
     setProdName(p.name);
@@ -347,7 +409,13 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
     setProdDescription(p.description || '');
     setProdFitType(p.fitType || 'Oversized');
     setProdFabricSpecs(p.fabricSpecs || '100% قطن مصري');
-    setProdImagesList(p.images || []);
+    const existingImgs = Array.isArray(p.images) && p.images.length > 0
+      ? p.images
+      : (p as any).image ? [(p as any).image] : [];
+    setProdImagesList(existingImgs);
+    setProdImageUrl('');
+    setIsProcessingProdImage(false);
+    setProdImageUploadStatus(null);
     setProdSizes(p.sizes || ['M', 'L', 'XL']);
     setProdColors(p.colors || [{ name: 'أسود', hex: '#111111' }]);
     setProdIsNew(!!p.isNew);
@@ -364,9 +432,13 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
       return;
     }
 
-    const images = prodImagesList.length > 0
-      ? prodImagesList
-      : [prodImageUrl.trim() || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80'];
+    // Include any typed image URL that wasn't explicitly added via button
+    let finalImages = [...prodImagesList];
+    if (prodImageUrl.trim() && !finalImages.includes(prodImageUrl.trim())) {
+      finalImages.push(prodImageUrl.trim());
+    }
+
+    finalImages = finalImages.filter((img) => typeof img === 'string' && img.trim().length > 0);
 
     const newProd: Product = {
       id: editingProductId || `prod-${Date.now()}`,
@@ -375,8 +447,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
       category: prodCategory || categories[0]?.slug || 'tshirts',
       price: Number(prodPrice),
       originalPrice: prodOriginalPrice ? Number(prodOriginalPrice) : undefined,
-      images,
-      description: prodDescription.trim() || 'منتج عالي الجودة بتصميم أنيق ومميز.',
+      images: finalImages,
+      description: prodDescription.trim() || 'منتج عالي الجودة بتصميم أنيق ومميز من تشكيلة ZYRO الرسمية.',
       colors: prodColors.length > 0 ? prodColors : [{ name: 'أساسي', hex: '#111111' }],
       sizes: prodSizes.length > 0 ? prodSizes : ['M', 'L', 'XL'],
       fitType: prodFitType.trim() || 'Regular Fit',
@@ -391,7 +463,7 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
 
     try {
       await saveProduct(newProd);
-      onShowToast('success', editingProductId ? 'تم تحديث المنتج بنجاح في قاعدة البيانات' : 'تم إضافة المنتج وحفظه سحابياً');
+      onShowToast('success', editingProductId ? 'تم تحديث المنتج وحفظ الصور بنجاح في قاعدة البيانات' : 'تم إضافة المنتج والصور وحفظها سحابياً');
       resetProductForm();
     } catch (err) {
       console.error(err);
@@ -444,6 +516,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
     setEditingCatId(null);
     setCatName('');
     setCatDescription('');
+    setCatImage('');
+    setIsProcessingCatImage(false);
     setCatIsActive(true);
     setIsCatFormOpen(false);
   };
@@ -452,8 +526,29 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
     setEditingCatId(cat.id);
     setCatName(cat.name);
     setCatDescription(cat.description || '');
+    setCatImage(cat.image || '');
+    setIsProcessingCatImage(false);
     setCatIsActive(cat.isActive !== false);
     setIsCatFormOpen(true);
+  };
+
+  const handleCategoryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsProcessingCatImage(true);
+      const optimized = await optimizeProductImage(file, 800, 0.85);
+      if (optimized) {
+        setCatImage(optimized);
+        onShowToast('success', 'تم رفع وتجهيز صورة القسم بنجاح');
+      }
+    } catch (err) {
+      console.error(err);
+      onShowToast('error', 'فشل معالجة صورة القسم');
+    } finally {
+      setIsProcessingCatImage(false);
+      e.target.value = '';
+    }
   };
 
   const handleSaveCategory = async (e: React.FormEvent) => {
@@ -479,6 +574,7 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
       nameEn: catName.trim(),
       slug: autoSlug,
       description: catDescription.trim() || '',
+      image: catImage.trim() || undefined,
       order: existingCat?.order || categories.length + 1,
       isActive: catIsActive,
     };
@@ -1007,43 +1103,125 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Images URLs */}
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-neutral-700">روابط صور المنتج (Image URLs)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="url"
-                          placeholder="https://images.unsplash.com/..."
-                          value={prodImageUrl}
-                          onChange={(e) => setProdImageUrl(e.target.value)}
-                          className="flex-1 border border-neutral-300 p-2.5 text-xs focus:border-black focus:outline-none font-brand"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!prodImageUrl.trim()) return;
-                            setProdImagesList((prev) => [...prev, prodImageUrl.trim()]);
-                            setProdImageUrl('');
-                          }}
-                          className="bg-neutral-900 text-white px-4 text-xs font-bold hover:bg-black transition-colors"
-                        >
-                          إضافة الصورة
-                        </button>
+                    {/* Product Images Management */}
+                    <div className="space-y-3 p-4 bg-neutral-50 border border-neutral-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-900">
+                            صور المنتج (Product Images)
+                          </label>
+                          <p className="text-[11px] text-neutral-500">
+                            الصورة الأولى هي الغلاف الرئيسي للمنتج في المتجر وكروت العرض. يمكنك رفع عدة صور معاً.
+                          </p>
+                        </div>
+                        <span className="text-xs font-bold bg-neutral-200 text-neutral-800 px-2 py-0.5 font-brand">
+                          {prodImagesList.length} صور
+                        </span>
                       </div>
-                      {prodImagesList.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-2">
+
+                      {/* Upload and URL Inputs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Direct File Upload */}
+                        <div>
+                          <label className="flex items-center justify-center gap-2 w-full p-2.5 bg-white border-2 border-dashed border-neutral-300 hover:border-black text-neutral-700 hover:text-black text-xs font-bold transition-all cursor-pointer">
+                            <Upload className="w-4 h-4 text-neutral-500" />
+                            <span>{isProcessingProdImage ? 'جاري المعالجة...' : 'رفع صور من جهازك (JPG / PNG)'}</span>
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              disabled={isProcessingProdImage}
+                              onChange={handleProductFileUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
+                        {/* Direct Web URL */}
+                        <div className="flex gap-1.5">
+                          <input
+                            type="url"
+                            placeholder="أو الصق رابط صورة مباشر..."
+                            value={prodImageUrl}
+                            onChange={(e) => setProdImageUrl(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddImageUrl();
+                              }
+                            }}
+                            className="flex-1 border border-neutral-300 bg-white p-2 text-xs focus:border-black focus:outline-none font-brand"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddImageUrl}
+                            className="bg-neutral-900 text-white px-3 text-xs font-bold hover:bg-black transition-colors shrink-0 cursor-pointer"
+                          >
+                            إضافة
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Processing / Upload status */}
+                      {prodImageUploadStatus && (
+                        <div className="text-xs text-blue-700 bg-blue-50 border border-blue-200 p-2 flex items-center gap-2">
+                          <RefreshCw className={`w-3.5 h-3.5 ${isProcessingProdImage ? 'animate-spin' : ''}`} />
+                          <span>{prodImageUploadStatus}</span>
+                        </div>
+                      )}
+
+                      {/* Image Thumbnails Gallery */}
+                      {prodImagesList.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
                           {prodImagesList.map((img, idx) => (
-                            <div key={idx} className="relative group w-16 h-20 border border-neutral-300 bg-neutral-100 overflow-hidden">
-                              <img src={img} alt="Product" className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => setProdImagesList((prev) => prev.filter((_, i) => i !== idx))}
-                                className="absolute inset-0 bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            <div
+                              key={idx}
+                              className={`relative group border overflow-hidden bg-white shadow-sm flex flex-col ${
+                                idx === 0 ? 'border-black ring-2 ring-black/10' : 'border-neutral-200'
+                              }`}
+                            >
+                              <div className="relative w-full aspect-square bg-neutral-100 overflow-hidden">
+                                <img
+                                  src={img}
+                                  alt={`Product ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                                {idx === 0 && (
+                                  <div className="absolute top-1 right-1 bg-black text-white text-[10px] font-bold px-1.5 py-0.5 shadow">
+                                    الغلاف الرئيسي ★
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-1.5 bg-neutral-50 flex items-center justify-between border-t border-neutral-100 text-[11px]">
+                                {idx !== 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMakeCoverImage(idx)}
+                                    className="text-neutral-700 hover:text-black font-bold text-[10px] hover:underline cursor-pointer"
+                                  >
+                                    تعيين كغلاف
+                                  </button>
+                                ) : (
+                                  <span className="text-neutral-500 font-bold text-[10px]">الصورة #1</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProductImage(idx)}
+                                  className="text-rose-600 hover:text-rose-800 p-1 cursor-pointer transition-colors"
+                                  title="حذف الصورة"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center border border-dashed border-neutral-300 bg-white text-neutral-400 text-xs">
+                          لا توجد صور مضافة للمنتج بعد. يمكنك رفع صورة أو أكثر من جهازك أو وضع رابط صورة مباشر.
                         </div>
                       )}
                     </div>
@@ -1345,6 +1523,48 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
                         onChange={(e) => setCatDescription(e.target.value)}
                         className="w-full border border-neutral-300 p-2.5 text-xs focus:border-black focus:outline-none"
                       />
+                    </div>
+
+                    {/* Category Image - Optional */}
+                    <div className="space-y-2 p-3 bg-neutral-50 border border-neutral-200">
+                      <label className="block font-bold text-neutral-700">
+                        صورة القسم / الغلاف <span className="text-neutral-400 font-normal">(اختياري)</span>
+                      </label>
+                      
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <label className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-neutral-300 hover:border-black text-neutral-700 text-xs font-bold transition-all cursor-pointer">
+                          <Upload className="w-4 h-4 text-neutral-500" />
+                          <span>{isProcessingCatImage ? 'جاري المعالجة...' : 'رفع صورة من جهازك'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isProcessingCatImage}
+                            onChange={handleCategoryFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="أو ضع رابط صورة القسم..."
+                          value={catImage}
+                          onChange={(e) => setCatImage(e.target.value)}
+                          className="flex-1 border border-neutral-300 bg-white p-2 text-xs focus:border-black focus:outline-none font-brand"
+                        />
+                      </div>
+
+                      {catImage && (
+                        <div className="relative w-20 h-20 border border-neutral-300 bg-white overflow-hidden mt-2">
+                          <img src={catImage} alt="Category Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setCatImage('')}
+                            className="absolute top-1 right-1 bg-red-600 text-white p-0.5 shadow hover:bg-red-700 cursor-pointer"
+                            title="إزالة الصورة"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-1">
